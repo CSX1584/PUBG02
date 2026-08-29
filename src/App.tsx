@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, Trash2, RefreshCw, Activity, UserX, Crosshair, GripVertical, Users, X } from 'lucide-react';
+import { Search, Loader2, Trash2, RefreshCw, Activity, UserX, Crosshair, GripVertical, Users, X, Download } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_PUBG_API_KEY;
 
@@ -187,7 +187,7 @@ export default function PubgBanChecker() {
         const exists = prev.findIndex(p => p.accountId === playerData.accountId);
         if (exists >= 0) {
           const newList = [...prev];
-          newList[exists] = playerData;
+          newList[exists] = { ...playerData, note: prev[exists].note };
           return newList;
         }
         return [playerData, ...prev];
@@ -232,7 +232,7 @@ export default function PubgBanChecker() {
           const playerData = await fetchPlayerData(currentName);
           setSavedPlayers(prev => {
             const index = prev.findIndex(p => p.accountId === playerData.accountId);
-            const next = index < 0 ? [...prev, playerData] : prev.map((player, playerIndex) => playerIndex === index ? playerData : player);
+            const next = index < 0 ? [...prev, playerData] : prev.map((player, playerIndex) => playerIndex === index ? { ...playerData, note: player.note } : player);
             return next.sort((a, b) => (importOrder.get(a.id.toLowerCase()) ?? Number.MAX_SAFE_INTEGER) - (importOrder.get(b.id.toLowerCase()) ?? Number.MAX_SAFE_INTEGER));
           });
           success = true;
@@ -300,7 +300,7 @@ export default function PubgBanChecker() {
       try {
         const updatedData = await fetchPlayerData(playerToUpdate.id);
         setSavedPlayers(prev => prev.map(p => 
-          p.accountId === playerToUpdate.accountId ? { ...updatedData, isUpdating: false } : p
+          p.accountId === playerToUpdate.accountId ? { ...updatedData, note: p.note, isUpdating: false } : p
         ));
       } catch (err) {
         setSavedPlayers(prev => prev.map(p => 
@@ -431,6 +431,32 @@ export default function PubgBanChecker() {
     currentIndexRef.current = 0;
   };
 
+  const exportPlayers = () => {
+    const blob = new Blob([JSON.stringify(savedPlayers, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pubg-tracker-players.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importPlayers = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!Array.isArray(parsed) || parsed.some(player => !player || typeof player.id !== 'string' || typeof player.accountId !== 'string')) {
+        throw new Error('文件格式不正确');
+      }
+      setSavedPlayers(parsed);
+      setError('');
+    } catch (err: any) {
+      setError(err.message || '导入数据失败');
+    }
+  };
+
   const savePlayerId = async (player: PlayerData) => {
     if (editingAccountId !== player.accountId) return;
     const nextId = editingValue.trim();
@@ -438,7 +464,7 @@ export default function PubgBanChecker() {
     if (!nextId || nextId.toLowerCase() === player.id.toLowerCase()) return;
     try {
       const updatedData = await fetchPlayerData(nextId);
-      setSavedPlayers(prev => prev.map(item => item.accountId === player.accountId ? updatedData : item));
+      setSavedPlayers(prev => prev.map(item => item.accountId === player.accountId ? { ...updatedData, note: item.note } : item));
     } catch (err: any) {
       setError(err.message || '更新玩家 ID 失败');
     }
@@ -448,7 +474,7 @@ export default function PubgBanChecker() {
     setSavedPlayers(prev => prev.map(p => p.accountId === player.accountId ? { ...p, isUpdating: true } : p));
     try {
       const updatedData = await fetchPlayerData(player.id);
-      setSavedPlayers(prev => prev.map(p => p.accountId === player.accountId ? { ...updatedData, isUpdating: false } : p));
+      setSavedPlayers(prev => prev.map(p => p.accountId === player.accountId ? { ...updatedData, note: p.note, isUpdating: false } : p));
     } catch (err) {
       setSavedPlayers(prev => prev.map(p => p.accountId === player.accountId ? { ...p, isUpdating: false } : p));
     }
@@ -566,6 +592,21 @@ export default function PubgBanChecker() {
                   {isEditing ? '完成编辑' : '管理'}
                 </button>
               )}
+              {savedPlayers.length > 0 && (
+                <button
+                  onClick={exportPlayers}
+                  disabled={isEditing || batchStatus.isRunning}
+                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  导出数据
+                </button>
+              )}
+              <label className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 cursor-pointer transition-colors">
+                <Download className="w-3.5 h-3.5 rotate-180" />
+                导入数据
+                <input type="file" accept=".json,application/json" onChange={importPlayers} className="hidden" />
+              </label>
             </div>
           </div>
 
