@@ -4,10 +4,10 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { font-family: 'IBM Plex Sans', 'Helvetica Neue', sans-serif; color: #161616; background: #f4f4f4; }
-body { margin: 0; min-width: 320px; background: #f4f4f4; }
-.ibm-shell { background: #f4f4f4 !important; color: #161616 !important; letter-spacing: .01em; }
-.ibm-shell > .max-w-md { max-width: 1200px !important; background: #fff !important; box-shadow: none !important; }
+:root { font-family: 'IBM Plex Sans', 'Helvetica Neue', sans-serif; color: #f4f4f4; background: #161616; }
+body { margin: 0; min-width: 320px; background: #161616; }
+.ibm-shell { background: #161616 !important; color: #f4f4f4 !important; letter-spacing: .01em; }
+.ibm-shell > .max-w-md { max-width: 1200px !important; background: #161616 !important; box-shadow: none !important; }
 .ibm-shell .sticky { background: #161616 !important; border-color: #393939 !important; backdrop-filter: none !important; }
 .ibm-shell h1 { font-size: clamp(1.5rem, 3vw, 2.25rem) !important; letter-spacing: -.03em !important; }
 .ibm-shell h1, .ibm-shell h2, .ibm-shell h3, .ibm-shell p, .ibm-shell span { font-family: 'IBM Plex Sans', 'Helvetica Neue', sans-serif; }
@@ -20,8 +20,8 @@ body { margin: 0; min-width: 320px; background: #f4f4f4; }
 .ibm-shell .rounded-2xl, .ibm-shell .rounded-xl, .ibm-shell .rounded-lg, .ibm-shell .rounded-md, .ibm-shell .rounded-full { border-radius: 0 !important; }
 .ibm-shell .bg-blue-600 { background: #0f62fe !important; }
 .ibm-shell .hover\:bg-blue-500:hover { background: #0353e9 !important; }
-.ibm-shell .bg-red-500\/10 { background: #fff1f1 !important; }
-.ibm-shell .text-red-400, .ibm-shell .text-red-500 { color: #da1e28 !important; }
+.ibm-shell .bg-red-500\/10 { background: #2b1a1a !important; }
+.ibm-shell .text-red-400, .ibm-shell .text-red-500 { color: #ff8389 !important; }
 .ibm-shell .text-emerald-400 { color: #198038 !important; }
 .ibm-shell .border-red-500\/20 { border-color: #ffb3b8 !important; }
 .ibm-shell input, .ibm-shell textarea { border-radius: 0 !important; background: #f4f4f4 !important; color: #161616 !important; border-color: #8d8d8d !important; box-shadow: none !important; }
@@ -31,7 +31,8 @@ body { margin: 0; min-width: 320px; background: #f4f4f4; }
 .ibm-shell button:focus-visible { outline: 2px solid #0f62fe; outline-offset: 2px; }
 .ibm-shell .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 1px !important; }
 .ibm-shell .overflow-hidden.rounded-2xl { border-left: 4px solid #0f62fe !important; }
-.ibm-shell .bg-gradient-to-r { background: #fff !important; }
+.ibm-shell .bg-gradient-to-r { background: #262626 !important; }
+.ibm-shell .flex-1.px-6 { background: #161616 !important; }
 .ibm-shell .shadow-2xl, .ibm-shell [class*='shadow-['] { box-shadow: none !important; }
 .ibm-shell .font-mono { font-family: 'IBM Plex Mono', monospace !important; }
 @media (min-width: 768px) {
