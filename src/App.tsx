@@ -385,7 +385,7 @@ export default function PubgBanChecker() {
   const bannedCount = savedPlayers.filter(p => p.isBanned).length;
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 font-sans selection:bg-blue-500/30 pb-safe relative">
+    <div className="ibm-shell min-h-screen bg-[#0B0F19] text-slate-100 font-sans selection:bg-blue-500/30 pb-safe relative">
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative shadow-2xl bg-[#0B0F19]">
         
         <div className="px-6 pt-12 pb-4 sticky top-0 z-30 bg-[#0B0F19]/80 backdrop-blur-xl border-b border-slate-800/50">
