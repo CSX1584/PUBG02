@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, Trash2, RefreshCw, Activity, UserX, Crosshair, GripVertical, Award, Users, X } from 'lucide-react';
+import { Search, Loader2, Trash2, RefreshCw, Activity, UserX, Crosshair, GripVertical, Users, X } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_PUBG_API_KEY;
 
@@ -10,6 +10,14 @@ interface PlayerData {
   banType: string;
   survivalLevel: number;
   survivalTier: number;
+  duoTppMatches?: number;
+  duoTppKills?: number;
+  duoTppKd?: number;
+  squadTppMatches?: number;
+  squadTppKills?: number;
+  squadTppKd?: number;
+  lastMatchAt?: string;
+  note?: string;
   lastChecked: string;
   isUpdating?: boolean;
 }
@@ -23,16 +31,13 @@ const formatTime = (date: Date) => {
   return `${month}-${day} ${hours}:${minutes}`;
 };
 
-const getTierStyle = (tier: number) => {
-  switch(tier) {
-    case 1: return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-    case 2: return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-    case 3: return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-    case 4: return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-    case 5: return 'bg-red-500/10 text-red-400 border-red-500/20';
-    default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-  }
+const formatMatchTime = (value?: string) => value ? formatTime(new Date(value)) : '--';
+
+const getTierStyle = () => {
+  return 'text-slate-300';
 };
+
+const getTierIcon = (tier: number) => tier >= 1 && tier <= 5 ? `/tier-icons/tier${tier}.png` : null;
 
 export default function PubgBanChecker() {
   const [playerId, setPlayerId] = useState('');
@@ -46,6 +51,8 @@ export default function PubgBanChecker() {
   
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
 
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchInput, setBatchInput] = useState('');
@@ -96,6 +103,13 @@ export default function PubgBanChecker() {
       
       let survivalLevel = 0;
       let survivalTier = 0;
+      let duoTppMatches: number | undefined;
+      let duoTppKills: number | undefined;
+      let duoTppKd: number | undefined;
+      let squadTppMatches: number | undefined;
+      let squadTppKills: number | undefined;
+      let squadTppKd: number | undefined;
+      let lastMatchAt: string | undefined;
       try {
         const masteryRes = await fetch(`https://api.pubg.com/shards/steam/players/${accountId}/survival_mastery`, {
           headers: {
@@ -114,6 +128,34 @@ export default function PubgBanChecker() {
         console.warn("获取生存等级失败", err);
       }
 
+      try {
+        const statsRes = await fetch(`https://api.pubg.com/shards/steam/players/${accountId}/seasons/lifetime`, {
+          headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/vnd.api+json' }
+        });
+        if (statsRes.ok) {
+          const stats = (await statsRes.json()).data?.attributes?.gameModeStats || {};
+          const kd = (mode: any) => mode?.roundsPlayed > 0 ? Number((mode.kills / mode.roundsPlayed).toFixed(2)) : undefined;
+          const duo = stats.duo;
+          const squad = stats.squad;
+          duoTppMatches = duo?.roundsPlayed;
+          duoTppKills = duo?.kills;
+          duoTppKd = kd(duo);
+          squadTppMatches = squad?.roundsPlayed;
+          squadTppKills = squad?.kills;
+          squadTppKd = kd(squad);
+        }
+
+        const matchId = player.relationships?.matches?.data?.[0]?.id;
+        if (matchId) {
+          const matchRes = await fetch(`https://api.pubg.com/shards/steam/matches/${matchId}`, {
+            headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/vnd.api+json' }
+          });
+          if (matchRes.ok) lastMatchAt = (await matchRes.json()).data?.attributes?.createdAt;
+        }
+      } catch (err) {
+        console.warn('获取模式数据失败', err);
+      }
+
       return {
         id: player.attributes.name,
         accountId: accountId,
@@ -121,6 +163,13 @@ export default function PubgBanChecker() {
         banType: banType,
         survivalLevel: survivalLevel,
         survivalTier: survivalTier,
+        duoTppMatches,
+        duoTppKills,
+        duoTppKd,
+        squadTppMatches,
+        squadTppKills,
+        squadTppKd,
+        lastMatchAt,
         lastChecked: formatTime(new Date())
       };
     }
@@ -155,12 +204,11 @@ export default function PubgBanChecker() {
     const names = batchInput.split(/[\n,，\s]+/).map(n => n.trim()).filter(n => n);
     const uniqueNames = names.filter((item, pos) => names.indexOf(item) === pos);
     
-    const newNames = uniqueNames.filter(n => 
-      !playersRef.current.some(p => p.id.toLowerCase() === n.toLowerCase())
-    );
+    const newNames = uniqueNames;
+    const importOrder = new Map(newNames.map((name, index) => [name.toLowerCase(), index]));
 
     if (newNames.length === 0) {
-      alert("没有找到新的有效ID，或ID已存在于列表中。");
+      alert("没有找到有效ID。");
       return;
     }
 
@@ -182,7 +230,11 @@ export default function PubgBanChecker() {
       while (retries > 0 && !success && !batchCancelRef.current) {
         try {
           const playerData = await fetchPlayerData(currentName);
-          setSavedPlayers(prev => [playerData, ...prev]);
+          setSavedPlayers(prev => {
+            const index = prev.findIndex(p => p.accountId === playerData.accountId);
+            const next = index < 0 ? [...prev, playerData] : prev.map((player, playerIndex) => playerIndex === index ? playerData : player);
+            return next.sort((a, b) => (importOrder.get(a.id.toLowerCase()) ?? Number.MAX_SAFE_INTEGER) - (importOrder.get(b.id.toLowerCase()) ?? Number.MAX_SAFE_INTEGER));
+          });
           success = true;
           successCount++;
         } catch (err: any) {
@@ -202,6 +254,13 @@ export default function PubgBanChecker() {
         setBatchStatus(prev => ({ ...prev, statusText: `等待下一条...` }));
         await new Promise(res => setTimeout(res, 3000));
       }
+    }
+
+    if (!batchCancelRef.current) {
+      setSavedPlayers(prev => prev
+        .filter(player => importOrder.has(player.id.toLowerCase()))
+        .sort((a, b) => (importOrder.get(a.id.toLowerCase()) ?? Number.MAX_SAFE_INTEGER) - (importOrder.get(b.id.toLowerCase()) ?? Number.MAX_SAFE_INTEGER))
+      );
     }
 
     setBatchStatus({ isRunning: false, current: 0, total: 0, errors: 0, statusText: '' });
@@ -370,6 +429,19 @@ export default function PubgBanChecker() {
   const removePlayer = (accountId: string) => {
     setSavedPlayers(prev => prev.filter(p => p.accountId !== accountId));
     currentIndexRef.current = 0;
+  };
+
+  const savePlayerId = async (player: PlayerData) => {
+    if (editingAccountId !== player.accountId) return;
+    const nextId = editingValue.trim();
+    setEditingAccountId(null);
+    if (!nextId || nextId.toLowerCase() === player.id.toLowerCase()) return;
+    try {
+      const updatedData = await fetchPlayerData(nextId);
+      setSavedPlayers(prev => prev.map(item => item.accountId === player.accountId ? updatedData : item));
+    } catch (err: any) {
+      setError(err.message || '更新玩家 ID 失败');
+    }
   };
 
   const forceRefreshSingle = async (player: PlayerData) => {
@@ -566,7 +638,21 @@ export default function PubgBanChecker() {
 
                         <div className="flex-1 p-4 flex flex-col justify-center min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <h3 className="text-base font-bold text-white truncate pr-2">{player.id}</h3>
+                            {isEditing && editingAccountId === player.accountId ? (
+                              <input
+                                autoFocus
+                                value={editingValue}
+                                onChange={e => setEditingValue(e.target.value)}
+                                onBlur={() => savePlayerId(player)}
+                                onKeyDown={e => e.key === 'Enter' && savePlayerId(player)}
+                                className="text-base font-bold truncate pr-2 px-2 py-1 w-full max-w-xs"
+                              />
+                            ) : (
+                              <h3
+                                onClick={() => { if (isEditing) { setEditingAccountId(player.accountId); setEditingValue(player.id); } }}
+                                className={`text-base font-bold text-white truncate pr-2 ${isEditing ? 'cursor-text' : ''}`}
+                              >{player.id} <span className="ml-2 text-xs font-mono font-normal text-slate-500">{player.accountId.split('.')[1]?.substring(0, 8)}</span></h3>
+                            )}
                             
                             <div className="shrink-0">
                               {isBanned ? (
@@ -583,22 +669,33 @@ export default function PubgBanChecker() {
                             </div>
                           </div>
                           
-                          <div className="flex items-center justify-between text-xs mt-1">
-                            <div className="flex items-center gap-2">
-                              {player.survivalLevel > 0 && (
-                                <span className={`shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${getTierStyle(player.survivalTier)}`}>
-                                  <Award className="w-3 h-3" />
-                                  <span>{player.survivalTier > 0 ? `${player.survivalTier}阶 ` : ''}Lv.{player.survivalLevel}</span>
-                                </span>
-                              )}
-                              <span className="text-slate-500 font-mono">ID: {player.accountId.split('.')[1]?.substring(0, 8)}</span>
+                          <div className="flex items-center justify-between text-xs mt-1 gap-3">
+                            <div className="flex flex-col items-start gap-1">
+                              {isEditing ? (
+                                <input
+                                  value={player.note || ''}
+                                  onChange={e => setSavedPlayers(prev => prev.map(item => item.accountId === player.accountId ? { ...item, note: e.target.value } : item))}
+                                  placeholder="添加备注..."
+                                  className="w-full max-w-sm text-xs px-2 py-1"
+                                />
+                              ) : player.note ? <span className="text-xs text-slate-400">{player.note}</span> : null}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {player.survivalLevel > 0 && (
+                                  <span className={`shrink-0 flex items-center gap-1 text-xs font-medium ${getTierStyle()}`}>
+                                    {getTierIcon(player.survivalTier) && <img src={getTierIcon(player.survivalTier)!} alt={`${player.survivalTier}阶`} className="w-4 h-4 object-contain" />}
+                                    <span>{player.survivalTier > 0 ? `${player.survivalTier}阶 ` : ''}Lv.{player.survivalLevel}</span>
+                                  </span>
+                                )}
+                                {player.duoTppKd !== undefined && <span className="text-xs text-slate-300">双排 {player.duoTppKd.toFixed(2)}</span>}
+                                {player.squadTppKd !== undefined && <span className="text-xs text-slate-300">四排 {player.squadTppKd.toFixed(2)}</span>}
+                              </div>
                             </div>
                             
                             <span className="text-slate-500 flex items-center shrink-0 ml-2">
                               {player.isUpdating ? (
                                 <span className="text-blue-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> 更新中</span>
                               ) : (
-                                player.lastChecked
+                                <span className="flex flex-col items-end gap-0.5"><span>最近游戏 {formatMatchTime(player.lastMatchAt)}</span><span>{player.lastChecked}</span></span>
                               )}
                             </span>
                           </div>
@@ -636,8 +733,8 @@ export default function PubgBanChecker() {
 
       {/* 批量导入弹窗 */}
       {showBatchModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-2xl flex flex-col">
             <div className="p-4 border-b border-slate-800 flex justify-between items-center">
               <h3 className="font-bold text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-500" />
